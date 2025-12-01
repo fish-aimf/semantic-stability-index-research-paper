@@ -7,7 +7,7 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
+            max-width: 1200px;
             margin: 50px auto;
             padding: 20px;
         }
@@ -74,9 +74,17 @@
         td {
             background-color: #f9f9f9;
         }
+        .text-preview {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 12px;
+            text-align: left;
+        }
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 15px;
             margin-top: 15px;
         }
@@ -95,6 +103,37 @@
             font-size: 12px;
             color: #666;
             margin-top: 5px;
+        }
+        .similarity-high {
+            background-color: #d4edda !important;
+            color: #155724;
+            font-weight: bold;
+        }
+        .similarity-medium {
+            background-color: #fff3cd !important;
+            color: #856404;
+        }
+        .similarity-low {
+            background-color: #f8d7da !important;
+            color: #721c24;
+        }
+        .interpretation {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #4CAF50;
+            border-radius: 5px;
+        }
+        .interpretation h3 {
+            margin-top: 0;
+            color: #4CAF50;
+        }
+        .interpretation ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .interpretation li {
+            margin: 5px 0;
         }
     </style>
 </head>
@@ -134,6 +173,46 @@
             container.appendChild(newBox);
         }
 
+        function getSimilarityClass(score) {
+            if (score >= 0.7) return 'similarity-high';
+            if (score >= 0.4) return 'similarity-medium';
+            return 'similarity-low';
+        }
+
+        function getInterpretation(ssi) {
+            if (ssi >= 0.8) {
+                return {
+                    level: 'Very High Semantic Stability',
+                    meaning: 'The texts are highly consistent in meaning and express very similar concepts.',
+                    color: '#28a745'
+                };
+            } else if (ssi >= 0.6) {
+                return {
+                    level: 'High Semantic Stability',
+                    meaning: 'The texts share strong semantic similarity with good conceptual alignment.',
+                    color: '#5cb85c'
+                };
+            } else if (ssi >= 0.4) {
+                return {
+                    level: 'Moderate Semantic Stability',
+                    meaning: 'The texts have some semantic overlap but differ in several aspects.',
+                    color: '#ffc107'
+                };
+            } else if (ssi >= 0.2) {
+                return {
+                    level: 'Low Semantic Stability',
+                    meaning: 'The texts have limited semantic similarity and express different concepts.',
+                    color: '#fd7e14'
+                };
+            } else {
+                return {
+                    level: 'Very Low Semantic Stability',
+                    meaning: 'The texts are semantically distinct with minimal conceptual overlap.',
+                    color: '#dc3545'
+                };
+            }
+        }
+
         async function calculateSSI() {
             try {
                 // Get all text inputs
@@ -167,39 +246,56 @@
                 const n = texts.length;
                 const pairCount = (n * (n - 1)) / 2;
                 const similarities = data.pairwise_similarities || [];
-
-                // Build similarity matrix
-                let matrixHTML = '';
-                if (similarities.length > 0) {
-                    matrixHTML = `
-                        <div class="similarity-matrix">
-                            <h3>Pairwise Cosine Similarity Matrix</h3>
-                            <table>
-                                <tr>
-                                    <th>Pair</th>
-                                    <th>Text A</th>
-                                    <th>Text B</th>
-                                    <th>Similarity Score</th>
-                                </tr>
-                    `;
-                    similarities.forEach((sim, idx) => {
-                        matrixHTML += `
-                            <tr>
-                                <td>${idx + 1}</td>
-                                <td>Text ${sim.i + 1}</td>
-                                <td>Text ${sim.j + 1}</td>
-                                <td>${sim.similarity.toFixed(6)}</td>
-                            </tr>
-                        `;
-                    });
-                    matrixHTML += '</table></div>';
-                }
+                const stdDev = data.std_dev || 0;
 
                 // Calculate statistics
                 const simScores = similarities.map(s => s.similarity);
                 const avgSim = simScores.length > 0 ? simScores.reduce((a, b) => a + b, 0) / simScores.length : 0;
                 const minSim = simScores.length > 0 ? Math.min(...simScores) : 0;
                 const maxSim = simScores.length > 0 ? Math.max(...simScores) : 0;
+
+                // Get interpretation
+                const interp = getInterpretation(ssi);
+
+                // Build detailed pairwise table with text previews
+                let matrixHTML = '';
+                if (similarities.length > 0) {
+                    matrixHTML = `
+                        <div class="similarity-matrix">
+                            <h3>Detailed Pairwise Comparisons</h3>
+                            <table>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Text A (Preview)</th>
+                                    <th>Text B (Preview)</th>
+                                    <th>Cosine Similarity</th>
+                                </tr>
+                    `;
+                    similarities.forEach((sim, idx) => {
+                        const textA = texts[sim.i].substring(0, 50) + (texts[sim.i].length > 50 ? '...' : '');
+                        const textB = texts[sim.j].substring(0, 50) + (texts[sim.j].length > 50 ? '...' : '');
+                        const simClass = getSimilarityClass(sim.similarity);
+                        
+                        matrixHTML += `
+                            <tr>
+                                <td>${idx + 1}</td>
+                                <td class="text-preview" title="${texts[sim.i].replace(/"/g, '&quot;')}">${textA}</td>
+                                <td class="text-preview" title="${texts[sim.j].replace(/"/g, '&quot;')}">${textB}</td>
+                                <td class="${simClass}">${sim.similarity.toFixed(6)}</td>
+                            </tr>
+                        `;
+                    });
+                    matrixHTML += `
+                            </table>
+                            <p style="font-size: 12px; color: #666; margin-top: 10px;">
+                                <strong>Color Guide:</strong> 
+                                <span style="color: #155724;">■ Green (≥0.7): High similarity</span> | 
+                                <span style="color: #856404;">■ Orange (0.4-0.7): Medium similarity</span> | 
+                                <span style="color: #721c24;">■ Red (<0.4): Low similarity</span>
+                            </p>
+                        </div>
+                    `;
+                }
 
                 document.getElementById('result').innerHTML = `
                     <div class="result">
@@ -210,6 +306,14 @@
                     <div class="details-section">
                         <h3>Statistical Summary</h3>
                         <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-value">${n}</div>
+                                <div class="stat-label">Total Texts</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">${pairCount}</div>
+                                <div class="stat-label">Pairwise Comparisons</div>
+                            </div>
                             <div class="stat-card">
                                 <div class="stat-value">${avgSim.toFixed(4)}</div>
                                 <div class="stat-label">Average Similarity</div>
@@ -223,11 +327,31 @@
                                 <div class="stat-label">Maximum Similarity</div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-value">${n}</div>
-                                <div class="stat-label">Total Texts</div>
+                                <div class="stat-value">${stdDev.toFixed(4)}</div>
+                                <div class="stat-label">Standard Deviation</div>
                             </div>
                         </div>
                         ${matrixHTML}
+                    </div>
+
+                    <div class="interpretation">
+                        <h3 style="color: ${interp.color};">📊 Interpretation: ${interp.level}</h3>
+                        <p><strong>What this means:</strong> ${interp.meaning}</p>
+                        <p><strong>Understanding SSI Scores:</strong></p>
+                        <ul>
+                            <li><strong>0.8 - 1.0:</strong> Very high semantic stability - texts are nearly identical in meaning</li>
+                            <li><strong>0.6 - 0.8:</strong> High semantic stability - texts convey similar core concepts</li>
+                            <li><strong>0.4 - 0.6:</strong> Moderate semantic stability - texts share some common themes</li>
+                            <li><strong>0.2 - 0.4:</strong> Low semantic stability - texts have limited semantic overlap</li>
+                            <li><strong>0.0 - 0.2:</strong> Very low semantic stability - texts are semantically distinct</li>
+                        </ul>
+                        <p><strong>Use Cases:</strong></p>
+                        <ul>
+                            <li>Measure consistency across multiple responses or documents</li>
+                            <li>Evaluate semantic coherence in generated text variations</li>
+                            <li>Assess agreement between different sources or perspectives</li>
+                            <li>Quality control for content generation systems</li>
+                        </ul>
                     </div>
                 `;
 
