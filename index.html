@@ -280,24 +280,10 @@
                 });
 
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('Server error response:', errorText);
                     throw new Error('Backend server error. Make sure Python server is running on localhost:5000');
                 }
 
                 const data = await response.json();
-                
-                console.log('Backend response:', data);
-                console.log('Data keys:', Object.keys(data));
-                
-                // Check if response has required fields
-                if (!data.ssi && !data.error) {
-                    throw new Error('Invalid response from server: ' + JSON.stringify(data));
-                }
-                
-                if (data.error) {
-                    throw new Error(data.error + (data.traceback ? '\n\n' + data.traceback : ''));
-                }
                 
                 // Display results
                 displayResults(data, texts);
